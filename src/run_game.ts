@@ -7,17 +7,28 @@
  * The script will interactively ask:
  *   1. Game mode  → terminal-only  OR  Slack broadcast
  *   2. Player count (4–8)
+ *   3. Personality assignment (optional) — by player or by role
  *
  * Env vars (all optional — the script will prompt for missing Slack credentials):
- *   SLACK_BOT_TOKEN   → Slack bot token (xoxb-...)
- *   GAME_CHANNEL_ID   → Slack channel to broadcast into
- *   PLAYER_NAMES      → comma-separated custom names (skips the count prompt)
- *   DELAY_MS          → ms between messages (default: 2000)
+ *   SLACK_BOT_TOKEN      → Slack bot token (xoxb-...)
+ *   GAME_CHANNEL_ID      → Slack channel to broadcast into
+ *   PLAYER_NAMES         → comma-separated custom names (skips the count prompt)
+ *   PLAYER_PERSONALITIES → comma-separated personality keys per player
+ *                          e.g. "aggressive,cautious,analytical,,,quiet"
+ *                          (empty entry = no personality for that player)
+ *   ROLE_PERSONALITIES   → role=key pairs, semicolon-separated
+ *                          e.g. "werewolf=aggressive;seer=analytical;villager=cautious"
+ *                          Applied after role assignment; overridden by PLAYER_PERSONALITIES
+ *                          Keys: aggressive, cautious, analytical, talkative,
+ *                                quiet, suspicious, friendly, emotional
+ *   DELAY_MS             → ms between messages (default: 2000)
  */
 
 import readline from "readline";
 import dotenv from "dotenv";
-import { WerewolfMultiAgentGame } from "./multi_agent_game";
+import { WerewolfMultiAgentGame, RolePersonalities } from "./multi_agent_game";
+import { PRESET_PERSONALITIES, PersonalityConfig } from "./agent";
+import { Role } from "./game_state";
 
 dotenv.config();
 
@@ -83,7 +94,95 @@ async function main() {
     console.log(`玩家：${playerNames.join("、")}`);
   }
 
-  // ── Step 3: delay ────────────────────────────────────────────────────────
+  // ── Step 3: personality mode ──────────────────────────────────────────────
+  let personalities: (PersonalityConfig | null)[] = playerNames.map(() => null);
+  let rolePersonalities: RolePersonalities = {};
+
+  const hasPlayerPersonalityEnv = !!process.env.PLAYER_PERSONALITIES;
+  const hasRolePersonalityEnv = !!process.env.ROLE_PERSONALITIES;
+
+  if (hasPlayerPersonalityEnv || hasRolePersonalityEnv) {
+    // ── From env vars ──────────────────────────────────────────────────────
+    if (hasPlayerPersonalityEnv) {
+      const keys = process.env.PLAYER_PERSONALITIES!.split(",").map((s) => s.trim());
+      personalities = playerNames.map((_, i) => {
+        const key = keys[i];
+        return key && PRESET_PERSONALITIES[key] ? PRESET_PERSONALITIES[key] : null;
+      });
+      console.log("\n玩家個性（來自 PLAYER_PERSONALITIES）：");
+      playerNames.forEach((name, i) => {
+        const p = personalities[i];
+        console.log(`  ${name}：${p ? p.name : "（無特定個性）"}`);
+      });
+    }
+
+    if (hasRolePersonalityEnv) {
+      // Format: "werewolf=aggressive;seer=analytical;villager=cautious"
+      const roleMap: Record<string, Role> = {
+        werewolf: Role.WEREWOLF, villager: Role.VILLAGER, seer: Role.SEER,
+        witch: Role.WITCH, hunter: Role.HUNTER,
+      };
+      process.env.ROLE_PERSONALITIES!.split(";").forEach((pair) => {
+        const [roleKey, personalityKey] = pair.split("=").map((s) => s.trim().toLowerCase());
+        const role = roleMap[roleKey];
+        const personality = PRESET_PERSONALITIES[personalityKey];
+        if (role && personality) rolePersonalities[role] = personality;
+      });
+      console.log("\n角色個性（來自 ROLE_PERSONALITIES）：");
+      Object.entries(rolePersonalities).forEach(([role, p]) => {
+        console.log(`  【${role}】：${(p as PersonalityConfig).name}`);
+      });
+    }
+  } else {
+    // ── Interactive ────────────────────────────────────────────────────────
+    console.log("\n── 個性設定（可選）──");
+    console.log("設定方式：");
+    console.log("  [1] 依玩家設定（每位玩家各自選）");
+    console.log("  [2] 依角色設定（同角色使用相同個性）");
+    console.log("  [3] 略過（全部無特定個性）");
+    const modeInput = await ask(rl, "請選擇 [預設 3]：");
+
+    if (modeInput === "1" || modeInput === "2") {
+      console.log("\n可用個性：");
+      Object.entries(PRESET_PERSONALITIES).forEach(([key, p]) => {
+        console.log(`  ${key.padEnd(12)} → ${p.name}：${p.traits.slice(0, 30)}…`);
+      });
+      console.log();
+    }
+
+    if (modeInput === "1") {
+      // Per-player
+      console.log("依序為每位玩家選擇個性，直接按 Enter 略過：");
+      for (let i = 0; i < playerNames.length; i++) {
+        const input = await ask(rl, `  ${playerNames[i]} 的個性 [留空略過]：`);
+        const key = input.trim().toLowerCase();
+        if (key && PRESET_PERSONALITIES[key]) {
+          personalities[i] = PRESET_PERSONALITIES[key];
+          console.log(`    ✅ ${PRESET_PERSONALITIES[key].name}`);
+        }
+      }
+    } else if (modeInput === "2") {
+      // Per-role
+      const roles: Array<{ key: string; role: Role; label: string }> = [
+        { key: "werewolf", role: Role.WEREWOLF, label: "狼人" },
+        { key: "seer",     role: Role.SEER,     label: "預言家" },
+        { key: "witch",    role: Role.WITCH,     label: "女巫" },
+        { key: "hunter",  role: Role.HUNTER,    label: "獵人" },
+        { key: "villager", role: Role.VILLAGER,  label: "平民" },
+      ];
+      console.log("為每種角色選擇個性，直接按 Enter 略過：");
+      for (const { role, label } of roles) {
+        const input = await ask(rl, `  【${label}】的個性 [留空略過]：`);
+        const key = input.trim().toLowerCase();
+        if (key && PRESET_PERSONALITIES[key]) {
+          rolePersonalities[role] = PRESET_PERSONALITIES[key];
+          console.log(`    ✅ ${PRESET_PERSONALITIES[key].name}`);
+        }
+      }
+    }
+  }
+
+  // ── Step 4: delay ────────────────────────────────────────────────────────
   const delayMs = process.env.DELAY_MS ? Number(process.env.DELAY_MS) : 2000;
 
   rl.close();
@@ -93,6 +192,8 @@ async function main() {
 
   const game = new WerewolfMultiAgentGame({
     playerNames,
+    personalities,
+    rolePersonalities,
     slackToken,
     channelId,
     delayMs,

@@ -9,8 +9,11 @@
  */
 
 import { WebClient } from "@slack/web-api";
-import { WerewolfAgent } from "./agent";
+import { WerewolfAgent, PersonalityConfig } from "./agent";
 import { Phase, Role } from "./game_state";
+
+/** 每種角色對應的個性設定（可只填部分角色） */
+export type RolePersonalities = Partial<Record<Role, PersonalityConfig>>;
 
 // ── Role presets by player count ────────────────────────────────────────────
 const ROLE_PRESETS: Record<number, Role[]> = {
@@ -27,6 +30,7 @@ interface Player {
   role: Role;
   agent: WerewolfAgent;
   alive: boolean;
+  personality?: PersonalityConfig;
 }
 
 interface SharedMessage {
@@ -37,6 +41,17 @@ interface SharedMessage {
 export interface MultiAgentGameOptions {
   /** Display names for each AI player, e.g. ["小明", "阿強", "阿美"] */
   playerNames: string[];
+  /**
+   * Per-player personality config. Length must match playerNames if provided.
+   * Use null/undefined entries to leave specific players with no personality.
+   * Takes precedence over rolePersonalities.
+   */
+  personalities?: (PersonalityConfig | null | undefined)[];
+  /**
+   * Per-role personality config. Applied after role assignment.
+   * Overridden by per-player personalities if both are set.
+   */
+  rolePersonalities?: RolePersonalities;
   /** Optional Slack bot token — if set, game is broadcasted to Slack */
   slackToken?: string;
   /** Slack channel ID to post into (required when slackToken is set) */
@@ -56,15 +71,20 @@ export class WerewolfMultiAgentGame {
   private channelId?: string;
   private delayMs: number;
   private discussionRounds: number;
+  private rolePersonalities: RolePersonalities;
 
   constructor(options: MultiAgentGameOptions) {
     const {
       playerNames,
+      personalities,
+      rolePersonalities = {},
       slackToken,
       channelId,
       delayMs = 2000,
       discussionRounds = 2,
     } = options;
+
+    this.rolePersonalities = rolePersonalities;
 
     if (slackToken && channelId) {
       this.slack = new WebClient(slackToken);
@@ -73,13 +93,17 @@ export class WerewolfMultiAgentGame {
     this.delayMs = delayMs;
     this.discussionRounds = discussionRounds;
 
-    this.players = playerNames.map((name, i) => ({
-      id: `P${i + 1}`,
-      name,
-      role: Role.UNKNOWN,
-      agent: new WerewolfAgent(),
-      alive: true,
-    }));
+    this.players = playerNames.map((name, i) => {
+      const personality = personalities?.[i] ?? undefined;
+      return {
+        id: `P${i + 1}`,
+        name,
+        role: Role.UNKNOWN,
+        agent: new WerewolfAgent(personality),
+        alive: true,
+        personality,
+      };
+    });
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -177,6 +201,13 @@ export class WerewolfMultiAgentGame {
       gs.myUserId = p.id;
       gs.myName = p.name;
       gs.players = this.players.map((x) => x.name); // name-based for natural speech
+
+      // Apply role-based personality (player-level personality takes precedence)
+      const rolePersonality = this.rolePersonalities[p.role];
+      if (rolePersonality) {
+        p.agent.setRolePersonality(rolePersonality);
+        if (!p.personality) p.personality = rolePersonality;
+      }
     }
 
     // Tell werewolves who their teammates are (private knowledge)
@@ -203,7 +234,8 @@ export class WerewolfMultiAgentGame {
         p.role === Role.WEREWOLF && teammates.length > 0
           ? `，隊友：${teammates.join("、")}`
           : "";
-      this.privateLog("角色", `${p.name} → 【${p.role}】${note}`);
+      const personalityNote = p.personality ? ` ｜ 個性：${p.personality.name}` : "";
+      this.privateLog("角色", `${p.name} → 【${p.role}】${note}${personalityNote}`);
     }
     console.log("──────────────────\n");
   }
