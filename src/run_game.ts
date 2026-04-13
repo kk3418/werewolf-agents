@@ -5,13 +5,10 @@
  *   npm run game
  *
  * The script will interactively ask:
- *   1. Game mode  → terminal-only  OR  Slack broadcast
- *   2. Player count (4–8)
- *   3. Personality assignment (optional) — by player or by role
+ *   1. Player count (4–8)
+ *   2. Personality assignment (optional) — by player or by role
  *
- * Env vars (all optional — the script will prompt for missing Slack credentials):
- *   SLACK_BOT_TOKEN      → Slack bot token (xoxb-...)
- *   GAME_CHANNEL_ID      → Slack channel to broadcast into
+ * Env vars (all optional):
  *   PLAYER_NAMES         → comma-separated custom names (skips the count prompt)
  *   PLAYER_PERSONALITIES → comma-separated personality keys per player
  *                          e.g. "aggressive,cautious,analytical,,,quiet"
@@ -48,33 +45,9 @@ async function main() {
 
   console.log("\n🐺  狼人殺 Multi-Agent 遊戲\n");
 
-  // ── Step 1: game mode ────────────────────────────────────────────────────
-  console.log("遊戲模式：");
-  console.log("  [1] 僅終端機（純 AI 對戰，結果印在 console）");
-  console.log("  [2] 串接 Slack（同時把對話廣播到 Slack 頻道供觀戰）");
-  const modeRaw = await ask(rl, "請輸入 1 或 2 [預設 1]：");
-  const useSlack = modeRaw === "2";
+  console.log("\n✅ 終端機模式：遊戲內容只會印在這裡\n");
 
-  let slackToken: string | undefined;
-  let channelId: string | undefined;
-
-  if (useSlack) {
-    slackToken = process.env.SLACK_BOT_TOKEN;
-    if (!slackToken) {
-      slackToken = await ask(rl, "SLACK_BOT_TOKEN (xoxb-...)：");
-    }
-
-    channelId = process.env.GAME_CHANNEL_ID;
-    if (!channelId) {
-      channelId = await ask(rl, "GAME_CHANNEL_ID（Slack 頻道 ID，例如 C0123456789）：");
-    }
-
-    console.log(`\n✅ Slack 模式：將廣播到頻道 ${channelId}\n`);
-  } else {
-    console.log("\n✅ 終端機模式：遊戲內容只會印在這裡\n");
-  }
-
-  // ── Step 2: player names ─────────────────────────────────────────────────
+  // ── Step 1: player names ─────────────────────────────────────────────────
   let playerNames: string[];
 
   if (process.env.PLAYER_NAMES) {
@@ -94,7 +67,7 @@ async function main() {
     console.log(`玩家：${playerNames.join("、")}`);
   }
 
-  // ── Step 3: personality mode ──────────────────────────────────────────────
+  // ── Step 2: personality mode ──────────────────────────────────────────────
   let personalities: (PersonalityConfig | null)[] = playerNames.map(() => null);
   let rolePersonalities: RolePersonalities = {};
 
@@ -182,7 +155,7 @@ async function main() {
     }
   }
 
-  // ── Step 4: delay ────────────────────────────────────────────────────────
+  // ── Step 3: delay ────────────────────────────────────────────────────────
   const delayMs = process.env.DELAY_MS ? Number(process.env.DELAY_MS) : 2000;
 
   rl.close();
@@ -194,8 +167,6 @@ async function main() {
     playerNames,
     personalities,
     rolePersonalities,
-    slackToken,
-    channelId,
     delayMs,
     discussionRounds: 2,
   });

@@ -3,15 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node src/main.ts",
     "game": "ts-node src/run_game.ts",
     "build": "tsc",
-    "start": "node dist/main.js"
+    "start": "node dist/run_game.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
     "@google/generative-ai": "^0.21.0",
-    "@slack/bolt": "^3.22.0",
     "dotenv": "^16.4.0",
     "openai": "^4.77.0"
   },

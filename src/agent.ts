@@ -77,7 +77,7 @@ const ROLE_DESCRIPTIONS: Record<Role, string> = {
   [Role.UNKNOWN]: `你的角色尚未設定。`,
 };
 
-const BASE_SYSTEM_PROMPT = `你正在 Slack 上玩狼人殺。你必須用繁體中文回應，策略性且自然地扮演一個真實玩家。
+const BASE_SYSTEM_PROMPT = `你正在參與一場狼人殺遊戲。你必須用繁體中文回應，策略性且自然地扮演一個真實玩家。
 
 遊戲規則：
 - 狼人：每晚選一名村民淘汰，白天混入人群不被發現

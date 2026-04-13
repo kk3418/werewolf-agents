@@ -5,10 +5,9 @@
  * All agents share a public conversation log; private info (roles, night
  * results) is injected only into the relevant agent's game state.
  *
- * Optionally posts every message to a Slack channel so humans can watch.
+ * results) is injected only into the relevant agent's game state.
  */
 
-import { WebClient } from "@slack/web-api";
 import { WerewolfAgent, PersonalityConfig } from "./agent";
 import { Phase, Role } from "./game_state";
 
@@ -52,10 +51,6 @@ export interface MultiAgentGameOptions {
    * Overridden by per-player personalities if both are set.
    */
   rolePersonalities?: RolePersonalities;
-  /** Optional Slack bot token — if set, game is broadcasted to Slack */
-  slackToken?: string;
-  /** Slack channel ID to post into (required when slackToken is set) */
-  channelId?: string;
   /** Delay in ms between agent messages (default: 2000) */
   delayMs?: number;
   /** Number of discussion rounds per day before voting (default: 2) */
@@ -67,8 +62,6 @@ export class WerewolfMultiAgentGame {
   private publicLog: SharedMessage[] = []; // all public messages
   private dayNumber = 0;
   private phase: Phase = Phase.WAITING;
-  private slack?: WebClient;
-  private channelId?: string;
   private delayMs: number;
   private discussionRounds: number;
   private rolePersonalities: RolePersonalities;
@@ -78,18 +71,12 @@ export class WerewolfMultiAgentGame {
       playerNames,
       personalities,
       rolePersonalities = {},
-      slackToken,
-      channelId,
       delayMs = 2000,
       discussionRounds = 2,
     } = options;
 
     this.rolePersonalities = rolePersonalities;
 
-    if (slackToken && channelId) {
-      this.slack = new WebClient(slackToken);
-      this.channelId = channelId;
-    }
     this.delayMs = delayMs;
     this.discussionRounds = discussionRounds;
 
@@ -140,26 +127,18 @@ export class WerewolfMultiAgentGame {
     return a;
   }
 
-  // ── Broadcast (public log + optional Slack) ────────────────────────────────
+  // ── Broadcast (public log) ─────────────────────────────────────────────────
 
   private async broadcast(text: string, speaker = "🎲 主持人") {
     this.publicLog.push({ speaker, text });
     console.log(`\n[${speaker}] ${text}`);
-
-    if (this.slack && this.channelId) {
-      await this.slack.chat.postMessage({
-        channel: this.channelId,
-        text: `*${speaker}*：${text}`,
-      });
-      await this.sleep(500);
-    }
   }
 
   private async playerSpeak(player: Player, text: string) {
     await this.broadcast(text, player.name);
   }
 
-  /** Private log — only goes to console, never to Slack (simulates secret info). */
+  /** Private log — only goes to console (simulates secret info). */
   private privateLog(label: string, msg: string) {
     console.log(`  🔒 [${label}] ${msg}`);
   }

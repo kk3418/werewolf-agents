@@ -1,24 +1,16 @@
 # 🐺 Werewolf Agents
 
-用 Claude AI 驅動的狼人殺 agent，支援兩種模式：
-
-- **多 AI 自動對戰**：讓多個 Claude agent 互相討論、投票、施展技能，完整跑完一局
-- **Slack 單人 agent**：把一個 AI 玩家加進你的 Slack 狼人殺遊戲，由真人主持、AI 參與
+用 Claude AI 驅動的狼人殺 agent，讓多個 Claude agent 互相討論、投票、施展技能，完整跑完一局。
 
 ---
 
 ## 目錄
 
 - [環境準備](#環境準備)
-- [模式一：多 AI 自動對戰](#模式一多-ai-自動對戰)
+- [如何執行](#如何執行)
   - [自訂玩家名稱](#自訂玩家名稱)
   - [設定玩家個性](#設定玩家個性)
   - [各人數預設角色](#各人數預設角色)
-- [模式二：Slack 單人 agent](#模式二slack-單人-agent)
-  - [建立 Slack App](#建立-slack-app)
-  - [取得 Token](#取得-token)
-  - [啟動 Bot](#啟動-bot)
-  - [遊戲流程指令](#遊戲流程指令)
 - [角色說明](#角色說明)
 - [專案結構](#專案結構)
 
@@ -68,9 +60,9 @@ ollama serve               # 預設跑在 localhost:11434
 
 ---
 
-## 模式一：多 AI 自動對戰
+## 如何執行
 
-讓 4–8 個 Claude agent 自己玩完一整局，不需要 Slack。
+讓 4–8 個 Claude agent 自己玩完一整局。
 
 ```bash
 npm run game
@@ -79,16 +71,11 @@ npm run game
 啟動後會互動詢問：
 
 ```
-遊戲模式：
-  [1] 僅終端機（純 AI 對戰，結果印在 console）
-  [2] 串接 Slack（同時把對話廣播到 Slack 頻道供觀戰）
-請輸入 1 或 2 [預設 1]：1
-
 玩家人數 4–8 [預設 6]：6
 玩家：小明、小華、阿強、阿美、阿志、小玲
 ```
 
-選模式 **1** 即可直接開始，遊戲過程會印在終端機。
+遊戲過程會印在終端機。
 
 ### 自訂玩家名稱
 
@@ -153,137 +140,6 @@ PLAYER_PERSONALITIES=aggressive,cautious,analytical,,,quiet
 | 7 | 狼人 ×2、預言家 ×1、女巫 ×1、平民 ×3 |
 | 8 | 狼人 ×2、預言家 ×1、女巫 ×1、獵人 ×1、平民 ×3 |
 
----
-
-## 模式二：Slack 單人 agent
-
-把一個 AI 玩家加進 Slack 頻道，由真人主持遊戲，AI 全程用繁體中文參與討論和投票。
-
-### 建立 Slack App
-
-1. 前往 [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
-
-2. **開啟 Socket Mode**（左側選單 → Socket Mode → Enable）
-   - 按 **Generate** 產生 App-Level Token，scope 選 `connections:write`
-   - 記下這個 token（`xapp-` 開頭），這是 `SLACK_APP_TOKEN`
-
-3. **設定 Bot Token Scopes**（左側 OAuth & Permissions → Bot Token Scopes）
-
-   加入以下 scopes：
-
-   | Scope | 用途 |
-   |-------|------|
-   | `channels:history` | 讀取公開頻道訊息 |
-   | `channels:read` | 列出頻道 |
-   | `chat:write` | 發送訊息 |
-   | `groups:history` | 讀取私人頻道訊息 |
-   | `groups:read` | 列出私人頻道 |
-   | `im:history` | 讀取 DM（接收主持人指令） |
-   | `im:read` | 列出 DM |
-   | `im:write` | 在 DM 回覆 |
-   | `users:read` | 取得玩家名稱 |
-
-4. **訂閱 Events**（左側 Event Subscriptions → Enable Events）
-
-   在 **Subscribe to bot events** 加入：
-   - `message.channels`
-   - `message.groups`
-   - `message.im`
-
-5. **安裝 App 到 Workspace**（左側 Install App → Install to Workspace）
-   - 安裝後取得 Bot User OAuth Token（`xoxb-` 開頭），這是 `SLACK_BOT_TOKEN`
-
-### 取得 Token
-
-完成後在 `.env` 填入：
-
-```env
-ANTHROPIC_API_KEY=sk-ant-你的金鑰
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-```
-
-### 啟動 Bot
-
-```bash
-npm run dev
-```
-
-看到以下訊息代表連線成功：
-
-```
-🐺 Werewolf Agent started! Bot ID: U0123456789
-```
-
-把 Bot 加入遊戲頻道（`/invite @你的Bot名稱`）。
-
-### 遊戲流程指令
-
-所有指令都透過 **DM 傳給 Bot**（私訊，非頻道）。
-
-#### 開局設定
-
-```
-role: werewolf          ← 設定 Bot 扮演的角色
-players: @Alice @Bob @Carol @Dave @Eve @Bot
-channel: #game-channel  ← 設定遊戲發生的頻道
-```
-
-支援的角色名稱：`werewolf`（狼人）、`villager`（平民）、`seer`（預言家）、`witch`（女巫）、`hunter`（獵人）
-
-#### 推進遊戲
-
-```
-phase: night    ← 進入夜晚（Bot 靜止不發言）
-night           ← 詢問 Bot 的夜晚行動目標（私訊回覆）
-phase: day      ← 進入白天，Bot 開始在頻道討論（天數 +1）
-phase: voting   ← 進入投票，Bot 在頻道發表投票意見
-vote            ← 直接詢問 Bot 要投誰（私訊回覆）
-dead: @玩家     ← 標記死亡玩家
-```
-
-#### 特殊身份
-
-```
-seer: @玩家 good    ← 告知預言家查驗結果為好人
-seer: @玩家 evil    ← 告知預言家查驗結果為狼人
-```
-
-#### 其他
-
-```
-status   ← 查看目前遊戲狀態
-reset    ← 重置遊戲（下一局開始前使用）
-```
-
-#### 完整一局範例
-
-```
-# 主持人 DM Bot：
-role: seer
-players: @小明 @小華 @阿強 @阿美 @WerewolfBot
-channel: #狼人殺
-
-phase: night
-night
-→ 🔒 Bot 回覆：我要查驗小明
-
-phase: day
-→ Bot 開始在頻道發言
-
-dead: @阿強
-→ ✅ 已標記死亡
-
-phase: voting
-→ Bot 在頻道公開投票並說明理由
-
-dead: @小明
-phase: night
-...
-```
-
----
-
 ## 角色說明
 
 | 角色 | 陣營 | 能力 |
@@ -307,6 +163,5 @@ src/
 ├── game_state.ts       遊戲狀態（玩家、階段、已知角色）
 ├── agent.ts            Claude 驅動的單一 agent 決策邏輯
 ├── multi_agent_game.ts 多 agent 自動對戰引擎（GameMaster）
-├── run_game.ts         多 AI 對戰的 CLI 入口
-└── main.ts             Slack Bot 入口（單人 agent 模式）
+└── run_game.ts         多 AI 對戰的 CLI 入口
 ```
